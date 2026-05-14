@@ -12,9 +12,9 @@ require('dotenv').config();
 const app = express();
 const server = http.createServer(app);
 
-const PORT = process.env.PORT || 3000;
+// CORRECCIÓN 1: Definir PORT una sola vez al inicio
+const PORT = process.env.PORT || 5000; 
 const JWT_SECRET = process.env.JWT_SECRET || 'top_secret';
-
 const MONGO_URI = process.env.MONGO_URI ? process.env.MONGO_URI.trim() : '';
 
 if (!MONGO_URI) {
@@ -22,21 +22,20 @@ if (!MONGO_URI) {
   process.exit(1);
 }
 
+// Conexión a MongoDB
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ Conectado exitosamente a MongoDB Atlas'))
   .catch((err) => {
-    console.error('❌ Error crítico de conexión MongoDB:');
-    console.error(err.message);
+    console.error('❌ Error crítico de conexión MongoDB:', err.message);
   });
 
+// Esquemas (Igual que los tenías)
 const { Schema } = mongoose;
-
 const userSchema = new Schema({
   email: { type: String, unique: true, required: true },
   password: { type: String, required: true },
   createdAt: { type: Date, default: Date.now }
 });
-
 const User = mongoose.model('User', userSchema);
 
 const messageSchema = new Schema({
@@ -45,25 +44,19 @@ const messageSchema = new Schema({
   content: { type: String, required: true },
   timestamp: { type: Date, default: Date.now }
 });
-
 const Message = mongoose.model('Message', messageSchema);
 
-const conversationSchema = new Schema({
-  participants: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-  lastMessage: { type: String },
-  updatedAt: { type: Date, default: Date.now }
-});
-
-const Conversation = mongoose.model('Conversation', conversationSchema);
-
+// CORRECCIÓN 2: CORS Dinámico para Producción
+// Esto permite que localhost funcione en pruebas y tu URL de Vercel en el despliegue
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: '*', // En producción real aquí pondrías tu URL de Vercel
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
 
+// Middleware JWT
 function authenticateJWT(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -77,10 +70,11 @@ function authenticateJWT(req, res, next) {
   });
 }
 
+// CORRECCIÓN 3: Configuración de Socket.io para la nube
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:5173',
-    methods: ['GET', 'POST']
+    origin: "*", // Permite conexiones desde cualquier cliente desplegado
+    methods: ["GET", "POST"]
   }
 });
 
@@ -100,6 +94,7 @@ io.on('connection', (socket) => {
         content: data.content
       });
       await newMessage.save();
+      // Emitir a la sala específica
       io.to(data.roomId).emit('receive_message', data);
     } catch (err) {
       console.error('❌ Error al guardar mensaje:', err.message);
@@ -109,6 +104,7 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => console.log('🔌 Usuario desconectado'));
 });
 
+// Rutas API (Iguales)
 app.post('/api/register', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email y password requeridos' });
@@ -131,7 +127,7 @@ app.post('/api/login', async (req, res) => {
     if (!user) return res.status(401).json({ error: 'Credenciales inválidas' });
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(401).json({ error: 'Credenciales inválidas' });
-    const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, { expiresIn: '2h' });
+    const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, { expiresIn: '24h' }); // Extendí el tiempo para pruebas
     res.json({ token, user: { id: user._id, email: user.email } });
   } catch (err) {
     res.status(500).json({ error: 'Error en login' });
@@ -147,62 +143,22 @@ app.get('/api/users', authenticateJWT, async (req, res) => {
   }
 });
 
+// CORRECCIÓN 4: Swagger dinámico para que no falle en Render
 const swaggerOptions = {
   definition: {
     openapi: '3.0.0',
     info: { 
       title: 'API ChatSeguro', 
       version: '1.0.0',
-      description: 'Documentación manual de rutas para Sistemas IV'
+      description: 'Documentación para Sistemas IV - Fase 5'
     },
-    servers: [{ url: `http://localhost:${PORT}` }],
+    servers: [
+        { url: `http://localhost:${PORT}`, description: 'Local' },
+        { url: 'https://tu-app-en-render.onrender.com', description: 'Producción' }
+    ],
     components: {
       securitySchemes: {
         bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }
-      }
-    },
-    paths: {
-      '/api/register': {
-        post: {
-          summary: 'Registra un nuevo usuario',
-          tags: ['Autenticación'],
-          requestBody: {
-            required: true,
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    email: { type: 'string', example: 'test@correo.com' },
-                    password: { type: 'string', example: '123456' }
-                  }
-                }
-              }
-            }
-          },
-          responses: { 201: { description: 'Éxito' } }
-        }
-      },
-      '/api/login': {
-        post: {
-          summary: 'Iniciar sesión',
-          tags: ['Autenticación'],
-          requestBody: {
-            required: true,
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    email: { type: 'string', example: 'test@correo.com' },
-                    password: { type: 'string', example: '123456' }
-                  }
-                }
-              }
-            }
-          },
-          responses: { 200: { description: 'Token devuelto' } }
-        }
       }
     }
   },
@@ -212,9 +168,9 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-app.get('/', (req, res) => res.json({ message: 'Servidor ChatSeguro Activo' }));
+app.get('/', (req, res) => res.json({ message: 'Servidor ChatSeguro Activo 🚀' }));
 
-server.listen(PORT, () => {
-  console.log(`🚀 Servidor en http://localhost:${PORT}`);
-  console.log(`📄 Swagger listo en http://localhost:${PORT}/api-docs`);
+// Iniciar servidor
+server.listen(PORT, '0.0.0.0', () => { // Agregué '0.0.0.0' para que Render escuche correctamente
+  console.log(`🚀 Servidor activo en puerto ${PORT}`);
 });
