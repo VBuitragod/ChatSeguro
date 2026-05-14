@@ -3,7 +3,7 @@ import { io } from 'socket.io-client';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode'; // Importamos para leer el ID del usuario
 
-const socket = io('http://localhost:3000');
+const socket = io('https://chatseguro-backend.onrender');
 
 export default function Chat() {
   const [message, setMessage] = useState('');
