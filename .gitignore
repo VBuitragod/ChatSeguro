@@ -1,9 +1,5 @@
-# Inicializa el repositorio de Git
-git init
-
-# Agrega todos los archivos (Git usará el .gitignore automáticamente)
-git add .
-
-# Crea el primer punto de control
-git commit -m "Proyecto Final ChatSeguro - Ingeniería de Sistemas IV"
-
+node_modules/
+.env
+backend/node_modules/
+frontend/node_modules/
+dist/
