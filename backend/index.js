@@ -154,7 +154,7 @@ const swaggerOptions = {
     },
     servers: [
         { url: `http://localhost:${PORT}`, description: 'Local' },
-        { url: 'https://tu-app-en-render.onrender.com', description: 'Producción' }
+        { url: 'https://chatseguro-backend.onrender.com/api', description: 'Producción' }
     ],
     components: {
       securitySchemes: {
