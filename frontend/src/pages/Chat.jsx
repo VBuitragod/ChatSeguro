@@ -1,109 +1,130 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import API from '../services/api';
 import { io } from 'socket.io-client';
-import { useNavigate } from 'react-router-dom';
-import { jwtDecode } from 'jwt-decode'; // Importamos para leer el ID del usuario
 
-const socket = io('https://chatseguro-backend.onrender');
+const socket = io('https://chatseguro-backend.onrender.com');
 
-export default function Chat() {
-  const [message, setMessage] = useState('');
+export default function ChatPage() {
+  const [contacts, setContacts] = useState([]);
+  const [selectedContact, setSelectedContact] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [userData, setUserData] = useState(null);
-  const navigate = useNavigate();
+  const [newMessage, setNewMessage] = useState('');
+  const currentUser = JSON.parse(localStorage.getItem('chat_user'));
+  const scrollRef = useRef();
 
   useEffect(() => {
-    // 1. Extraer datos del usuario al cargar
-    const token = localStorage.getItem('chat_token');
-    if (token) {
+    // Cargar lista de usuarios
+    const loadUsers = async () => {
       try {
-        const decoded = jwtDecode(token);
-        setUserData(decoded);
-      } catch (error) {
-        console.error("Token inválido");
-        navigate('/login');
-      }
-    }
+        const res = await API.get('/users');
+        setContacts(res.data.filter(u => u._id !== currentUser.id));
+      } catch (err) { console.error(err); }
+    };
+    loadUsers();
 
-    // 2. Escuchar mensajes
+    // Escuchar mensajes en tiempo real
     socket.on('receive_message', (data) => {
-      setMessages((prev) => [...prev, data]);
+      setMessages(prev => [...prev, data]);
     });
 
-    socket.emit('join_room', 'general');
-
     return () => socket.off('receive_message');
-  }, [navigate]);
+  }, []);
 
-  const sendMessage = (e) => {
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSend = (e) => {
     e.preventDefault();
-    const token = localStorage.getItem('chat_token');
+    if (!newMessage.trim() || !selectedContact) return;
 
-    if (message.trim() && token && userData) {
-      const messageData = {
-        roomId: 'general',
-        content: message,
-        senderId: userData.id, // ID real de MongoDB extraído del Token
-        receiverId: userData.id, // Temporalmente a ti mismo para probar la persistencia
-      };
+    const data = {
+      senderId: currentUser.id,
+      receiverId: selectedContact._id,
+      content: newMessage,
+      roomId: [currentUser.id, selectedContact._id].sort().join('-')
+    };
 
-      console.log("Enviando mensaje:", messageData);
-      socket.emit('send_message', messageData);
-      setMessage('');
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('chat_token');
-    navigate('/login');
+    socket.emit('send_message', data);
+    setMessages(prev => [...prev, data]);
+    setNewMessage('');
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-900 text-white p-4">
-      <div className="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
-        <div>
-          <h2 className="text-2xl font-bold text-blue-400">ChatSeguro 🔒</h2>
-          <p className="text-xs text-gray-400">{userData?.email}</p>
-        </div>
-        <button onClick={handleLogout} className="bg-red-600 hover:bg-red-700 px-4 py-1 rounded text-sm transition">
-          Cerrar Sesión
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto bg-gray-800 rounded-lg p-4 mb-4 shadow-inner flex flex-col gap-3">
-        {messages.length === 0 && (
-          <p className="text-gray-500 text-center mt-10">No hay mensajes. Escribe algo para probar la DB.</p>
-        )}
-        {messages.map((msg, index) => (
-          <div 
-            key={index} 
-            className={`flex flex-col ${msg.senderId === userData?.id ? 'items-end' : 'items-start'}`}
-          >
-            <span className="text-[10px] text-gray-500 mb-1">
-              {msg.senderId === userData?.id ? 'Tú' : 'Otro usuario'}
-            </span>
-            <div className={`p-3 rounded-2xl max-w-md w-fit ${
-              msg.senderId === userData?.id 
-                ? 'bg-blue-700 text-white rounded-tr-none' 
-                : 'bg-gray-700 text-gray-200 rounded-tl-none'
-            }`}>
-              {msg.content}
+    <div className="flex h-screen bg-gray-100 overflow-hidden">
+      {/* PANEL LATERAL (Sidebar) */}
+      <aside className="w-80 bg-indigo-900 text-white flex flex-col shadow-xl">
+        <header className="p-5 border-b border-indigo-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-500 rounded-full flex items-center justify-center font-bold">
+              {currentUser.email[0].toUpperCase()}
             </div>
+            <span className="text-sm font-semibold truncate w-32">{currentUser.email}</span>
           </div>
-        ))}
-      </div>
+          <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="p-2 bg-red-500 hover:bg-red-600 rounded-lg text-xs transition">Salir</button>
+        </header>
 
-      <form onSubmit={sendMessage} className="flex gap-2 bg-gray-800 p-2 rounded-full">
-        <input
-          type="text"
-          className="flex-1 bg-transparent border-none px-4 py-1 focus:outline-none"
-          placeholder="Escribe un mensaje..."
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-        />
-        <button type="submit" className="bg-blue-500 hover:bg-blue-600 w-10 h-10 rounded-full flex items-center justify-center transition">
-          🚀
-        </button>
-      </form>
+        <nav className="flex-1 overflow-y-auto">
+          <div className="p-4 text-xs font-bold text-indigo-300 uppercase tracking-wider">Contactos</div>
+          {contacts.map(u => (
+            <div 
+              key={u._id} 
+              onClick={() => setSelectedContact(u)}
+              className={`p-4 flex items-center gap-4 cursor-pointer hover:bg-indigo-800 transition ${selectedContact?._id === u._id ? 'bg-indigo-800 border-l-4 border-emerald-400' : ''}`}
+            >
+              <div className="relative">
+                <div className="w-12 h-12 bg-gray-500 rounded-full flex items-center justify-center text-xl">{u.email[0].toUpperCase()}</div>
+                <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-indigo-900 rounded-full"></div>
+              </div>
+              <span className="text-sm font-medium">{u.email.split('@')[0]}</span>
+            </div>
+          ))}
+        </nav>
+      </aside>
+
+      {/* PANEL DE CHAT */}
+      <main className="flex-1 flex flex-col bg-white">
+        {selectedContact ? (
+          <>
+            <header className="p-4 border-b flex items-center gap-4 bg-white shadow-sm">
+              <div className="w-10 h-10 bg-gray-400 rounded-full flex items-center justify-center text-white">{selectedContact.email[0].toUpperCase()}</div>
+              <div>
+                <h3 className="font-bold text-gray-800">{selectedContact.email}</h3>
+                <span className="text-xs text-emerald-500 font-bold">● En línea</span>
+              </div>
+            </header>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50">
+              {messages.map((msg, i) => (
+                <div key={i} className={`flex ${msg.senderId === currentUser.id ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-xs md:max-w-md px-4 py-2 rounded-2xl shadow-sm text-sm ${msg.senderId === currentUser.id ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white text-gray-800 border rounded-tl-none'}`}>
+                    {msg.content}
+                    <div className="text-[10px] mt-1 opacity-70 text-right">✓✓</div>
+                  </div>
+                </div>
+              ))}
+              <div ref={scrollRef} />
+            </div>
+
+            <form onSubmit={handleSend} className="p-4 bg-white border-t flex items-center gap-3">
+              <button type="button" className="text-2xl hover:bg-gray-100 p-2 rounded-full transition">📎</button>
+              <input 
+                type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)}
+                placeholder="Escribe un mensaje..." 
+                className="flex-1 p-3 bg-gray-100 rounded-full outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <button type="submit" className="bg-indigo-600 text-white p-3 rounded-full hover:bg-indigo-700 transition">
+                ➤
+              </button>
+            </form>
+          </>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-300">
+            <span className="text-8xl mb-4">💬</span>
+            <p className="text-xl font-medium">Selecciona un chat para empezar</p>
+          </div>
+        )}
+      </main>
     </div>
   );
 }

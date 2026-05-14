@@ -1,10 +1,11 @@
 import axios from 'axios';
 
 const API = axios.create({
+  // URL de tu backend en Render (Asegúrate de que no tenga espacios)
   baseURL: 'https://chatseguro-backend.onrender.com/api'
 });
 
-// Este interceptor pega el token automáticamente en cada petición protegida
+// Interceptor para seguridad (JWT)
 API.interceptors.request.use((config) => {
   const token = localStorage.getItem('chat_token');
   if (token) {
