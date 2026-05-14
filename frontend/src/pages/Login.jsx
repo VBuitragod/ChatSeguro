@@ -11,7 +11,7 @@ export default function Login() {
     e.preventDefault();
     try {
       // Llamada a tu servidor Node.js
-      const res = await axios.post('http://localhost:3000/api/login', { email, password });
+      const res = await axios.post('https://chatseguro-backend.onrender.com', { email, password });
       
       // GUARDADO CRÍTICO: Debe llamarse 'chat_token' como pide tu App.jsx
       localStorage.setItem('chat_token', res.data.token); 

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const API = axios.create({
-  baseURL: 'http://localhost:3000/api'
+  baseURL: 'https://chatseguro-backend.onrender.com'
 });
 
 // Este interceptor pega el token automáticamente en cada petición protegida
