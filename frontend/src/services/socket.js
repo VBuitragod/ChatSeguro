@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = 'https://chatseguro-backend.onrender.com'; // Ajusta la URL de tu backend
+const SOCKET_URL = 'https://chatseguro-backend.onrender.com'; // URL del backend
 
 export const initSocket = () => {
   const token = localStorage.getItem('chat_token');
